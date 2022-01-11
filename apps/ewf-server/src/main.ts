@@ -1,17 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { natsConfig } from './nats.config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  const natsMicroservice = await app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.NATS,
-    options: {
-      servers: ['nats://localhost:4222'],
-    },
-  });
-
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.connectMicroservice(natsConfig);
   await app.startAllMicroservices();
   await app.listen(3001);
 }
