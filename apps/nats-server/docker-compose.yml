@@ -1,0 +1,6 @@
+services:
+  nats-ws:
+    build: .
+    ports:
+      - 443:443
+      - 4222:4222

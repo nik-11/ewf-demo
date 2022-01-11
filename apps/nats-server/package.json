@@ -1,0 +1,11 @@
+{
+  "name": "nats-server",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "docker compose build",
+    "dev": "docker compose up -d"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
