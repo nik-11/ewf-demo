@@ -1,18 +1,38 @@
 import { useState, useEffect } from 'react';
-import { connect, StringCodec } from 'nats.ws';
+import { JSONCodec, connect, NatsConnection } from 'nats.ws';
 
-const sc = StringCodec();
+const jc = JSONCodec();
 
 const App = () => {
-  const [nc, setConnection] = useState(undefined);
+  const [nc, setConnection] = useState<NatsConnection>(null);
+
+  const logMessages = async (messages) => {
+    for await (const m of messages) {
+      console.log(
+        `[${messages.getProcessed()}]: ${JSON.stringify(jc.decode(m.data))}`
+      );
+    }
+    console.log('subscription closed');
+  };
 
   useEffect(() => {
     if (!nc) {
-      connect({ servers: ['ws://127.0.0.1:4222'] })
-        .then((connection) => setConnection(connection))
-        .catch((err) => console.error(err));
+      connect({ servers: ['ws://localhost:443'], user: 'bob' })
+        .then((connection) => {
+          console.log('connected!', connection);
+          setConnection(connection);
+        })
+        .catch((err) => console.log(err));
     }
   });
+
+  useEffect(() => {
+    if (nc) {
+      nc.publish('connect', jc.encode({ message: 'hi!' }));
+      const messages = nc.subscribe('message');
+      logMessages(messages);
+    }
+  }, [nc]);
 
   return <div className="App">Testing</div>;
 };
