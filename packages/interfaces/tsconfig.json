@@ -1,0 +1,4 @@
+{
+  "display": "interfaces",
+  "extends": "tsconfig/base.json"
+}
