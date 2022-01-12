@@ -7,66 +7,105 @@ import {
   Nuid,
   MsgHdrs,
 } from 'nats.ws';
+import { Message, User } from 'interfaces';
+import OnlineUsers from './OnlineUsers';
 
 const jc = JSONCodec();
 
 interface ClientProps {}
 
+export const nuid = new Nuid().next();
+export const publishEvent = (
+  connection: NatsConnection,
+  subject: string,
+  data: any
+) => {
+  const headers = new MsgHdrsImpl();
+  headers.append('id', nuid);
+  headers.append('unix_time', Date.now().toString());
+  connection.publish(subject, jc.encode(data), { headers });
+};
+
 const Client: FunctionComponent<ClientProps> = () => {
   const [nc, setConnection] = useState<NatsConnection>(null);
-  const [id] = useState<string>(new Nuid().next());
+  const [users, setUsers] = useState<User[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
-  const logResponse = async (data) => {
-    for await (const m of data) {
+  const listenForChanges = async (subscription) => {
+    for await (const m of subscription) {
+      const { data, pattern }: any = jc.decode(m.data);
+      switch (pattern) {
+        case 'users':
+          setUsers(data);
+          break;
+        case 'messages':
+          setMessages((messages) => [...messages, data]);
+          break;
+        default:
+          break;
+      }
       console.log(
-        `[${data.getProcessed()}]: ${JSON.stringify(jc.decode(m.data))}`
+        `[${subscription.getProcessed()}]: ${JSON.stringify({ data, pattern })}`
       );
     }
     console.log('subscription closed');
   };
 
-  const publishHeaders = (): MsgHdrs => {
-    const headers = new MsgHdrsImpl();
-    headers.append('id', id);
-    headers.append('unix_time', Date.now().toString());
-    return headers;
-  };
-
   useEffect(() => {
+    console.log('Mounting component');
     let c;
     if (!nc) {
-      const headers = publishHeaders();
-      connect({ servers: ['ws://localhost:443'], user: id })
+      connect({ servers: ['ws://localhost:443'], user: nuid })
         .then((connection) => {
           c = connection;
           console.log('connected!', c);
           setConnection(c);
-          connection.publish('connect', jc.encode({ message: 'hi!' }), {
-            headers,
-          });
+          publishEvent(c, 'connect', { message: 'hi!' });
         })
         .catch((err) => console.log(err));
     }
 
     return () => {
       console.log('Unmounting component');
-
-      const headers = publishHeaders();
-      c.publish('disconnect', jc.encode({ message: 'bye!' }), { headers });
+      publishEvent(c, 'disconnect', { message: 'hi!' });
       c.drain();
     };
   }, []);
 
   useEffect(() => {
+    console.log('nc useEffect');
     if (nc) {
-      const messages = nc.subscribe('message');
-      logResponse(messages);
+      const messages = nc.subscribe('messages');
+      listenForChanges(messages);
       const users = nc.subscribe('users');
-      logResponse(users);
+      listenForChanges(users);
     }
   }, [nc]);
 
-  return <div>Client works!</div>;
+  const sendMessage = (event) => {
+    if (event.key === 'Enter') {
+      publishEvent(nc, 'message', { message: event.target.value });
+    }
+  };
+
+  return (
+    <div>
+      <h2>Client</h2>
+      <OnlineUsers users={users} />
+      <div>
+        <h3>Messages</h3>
+        <div>{messages.length}</div>
+        {messages?.length > 0 && (
+          <div>
+            {messages.map(({ message }, index) => (
+              <div key={`message${index}`}>{message}</div>
+            ))}
+          </div>
+        )}
+      </div>
+      <input type="text" onKeyDown={sendMessage} />
+    </div>
+  );
 };
 
 export default Client;
