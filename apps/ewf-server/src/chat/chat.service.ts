@@ -15,17 +15,17 @@ export class ChatService implements OnApplicationBootstrap {
     this.client.connect().then((value) => console.log(value));
   }
 
-  connectUser(socket: Socket) {
-    if (!this.users.has(socket.id)) {
+  connectUser(id: string) {
+    if (!this.users.has(id)) {
       this.numOfUsers++;
-      this.users.set(socket.id, { name: `user${this.numOfUsers}` });
+      this.users.set(id, { name: id });
       this.publishUsers();
     }
   }
 
-  disconnectUser(socket: Socket) {
-    if (this.users.has(socket.id)) {
-      this.users.delete(socket.id);
+  disconnectUser(id: string) {
+    if (this.users.has(id)) {
+      this.users.delete(id);
       this.publishUsers();
     }
   }

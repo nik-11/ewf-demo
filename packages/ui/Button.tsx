@@ -1,4 +1,4 @@
 import * as React from 'react';
-export const Button = () => {
-  return <button>Boop</button>;
+export const Button = ({ onClick }: any) => {
+  return <button onClick={onClick}>Toggle</button>;
 };
