@@ -29,7 +29,8 @@
     "rimraf": "^3.0.2",
     "rxjs": "^7.2.0",
     "nats": "^2.4.0",
-    "socket.io": "^4.4.1"
+    "socket.io": "^4.4.1",
+    "unique-names-generator": "^4.6.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^8.0.0",

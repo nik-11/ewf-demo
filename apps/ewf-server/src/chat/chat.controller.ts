@@ -25,4 +25,12 @@ export class ChatController {
       this.chatService.disconnectUser(headers.get('id'));
     }
   }
+
+  @EventPattern('message')
+  sendMessage(@Payload() data: any, @Ctx() context: NatsContext) {
+    console.log(`Subject: ${context.getSubject()}`);
+    console.log(`Headers: ${context.getHeaders()}`);
+    console.log(data);
+    this.chatService.publishMessage(data);
+  }
 }
