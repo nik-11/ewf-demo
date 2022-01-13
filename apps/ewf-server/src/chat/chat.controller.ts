@@ -26,11 +26,52 @@ export class ChatController {
     }
   }
 
+  // TODO: match subject in EventPattern, and inject from context.getSubject()
   @EventPattern('message')
   sendMessage(@Payload() data: any, @Ctx() context: NatsContext) {
     console.log(`Subject: ${context.getSubject()}`);
     console.log(`Headers: ${context.getHeaders()}`);
-    console.log(data);
-    this.chatService.publishMessage(data);
+    const headers = context.getHeaders();
+    if (headers && headers.get('id')) {
+      this.chatService.publishMessageToChannel(
+        data.subject,
+        headers.get('id'),
+        data.message
+      );
+    }
+  }
+
+  @EventPattern('create_channel')
+  createChannel(@Payload() data: any, @Ctx() context: NatsContext) {
+    console.log(`Subject: ${context.getSubject()}`);
+    console.log(`Headers: ${context.getHeaders()}`);
+    const headers = context.getHeaders();
+    if (headers && headers.get('id')) {
+      this.chatService.createChannel(
+        data.subject,
+        headers.get('id'),
+        data.users
+      );
+    }
+  }
+
+  @EventPattern('join_channel')
+  fetchChannel(@Payload() data: any, @Ctx() context: NatsContext) {
+    console.log(`Subject: ${context.getSubject()}`);
+    console.log(`Headers: ${context.getHeaders()}`);
+    const headers = context.getHeaders();
+    if (headers && headers.get('id')) {
+      this.chatService.joinChannel(data.subject, headers.get('id'));
+    }
+  }
+
+  @EventPattern('delete_channel')
+  deleteChannel(@Payload() data: any, @Ctx() context: NatsContext) {
+    console.log(`Subject: ${context.getSubject()}`);
+    console.log(`Headers: ${context.getHeaders()}`);
+    const headers = context.getHeaders();
+    if (headers && headers.get('id')) {
+      this.chatService.deleteChannel(data.subject, headers.get('id'));
+    }
   }
 }

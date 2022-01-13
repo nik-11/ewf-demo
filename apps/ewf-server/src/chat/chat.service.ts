@@ -1,8 +1,6 @@
 import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
-import { Socket } from 'socket.io';
-import { WsException } from '@nestjs/websockets';
 import { ClientProxy } from '@nestjs/microservices';
-import { Message, User } from 'interfaces';
+import { Channel, Message, User } from 'interfaces';
 import {
   adjectives,
   animals,
@@ -14,6 +12,7 @@ export class ChatService implements OnApplicationBootstrap {
   numOfUsers: number = 0;
   users: Map<string, User> = new Map();
   messages: Map<string, Message[]> = new Map();
+  channels: Map<string, Channel> = new Map();
 
   constructor(@Inject('NATS_SERVICE') private client: ClientProxy) {}
 
@@ -47,12 +46,56 @@ export class ChatService implements OnApplicationBootstrap {
     return this.serialiseUsersToJSON();
   }
 
-  publishMessage(msg: string) {
-    return this.client.emit('messages', msg);
+  publishMessageToChannel(subject: string, userId: string, msg: string) {
+    const channel = this.channels.get(subject);
+    if (channel) {
+      const message: Message = {
+        author: this.users.get(userId),
+        message: msg,
+        timestamp: new Date().toUTCString(),
+      };
+      channel.messages.push(message);
+      this.channels.set(subject, channel);
+      return this.client.emit(`${subject}.messages`, { message });
+    }
   }
 
   publishUsers() {
     return this.client.emit('users', this.serialiseUsersToJSON());
+  }
+
+  createChannel(subject: string, userId: string, channelUsers: string[]) {
+    if (!this.channels.has(subject)) {
+      const createdBy = this.users.get(userId);
+      const users = channelUsers.map((id: string) => this.users.get(id));
+      const channel = {
+        subject,
+        createdBy,
+        users,
+        messages: [],
+      };
+      this.channels.set(subject, channel);
+      this.client.emit(subject, { channel });
+    }
+  }
+
+  joinChannel(subject: string, userId: string) {
+    const channel = this.channels.get(subject);
+    // Check user can access the channel
+    if (channel && channel.users.some(({ id }) => id === userId)) {
+      this.client.emit(subject, { channel });
+    } else {
+      this.client.emit(subject, { message: 'Unauthorized' });
+    }
+  }
+
+  deleteChannel(subject: string, userId: string) {
+    const channel = this.channels.get(subject);
+    // Check user is creator of channel
+    if (channel && channel.createdBy.id === userId) {
+      this.channels.delete(subject);
+      this.client.emit(subject, { message: 'Deleted' });
+    }
   }
 
   private serialiseUsersToJSON() {

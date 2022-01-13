@@ -1,6 +1,7 @@
+import { User } from './user';
+
 export interface Message {
-  author: string;
-  recipients: string[];
+  author: User;
   message: string;
   timestamp: string;
 }
