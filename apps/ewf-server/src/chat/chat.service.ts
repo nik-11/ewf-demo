@@ -52,7 +52,7 @@ export class ChatService implements OnApplicationBootstrap {
       const message: Message = {
         author: this.users.get(userId),
         message: msg,
-        timestamp: new Date().toUTCString(),
+        timestamp: Date.now().toString(),
       };
       channel.messages.push(message);
       this.channels.set(subject, channel);
