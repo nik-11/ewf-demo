@@ -1,6 +1,6 @@
 import Client from './Client';
-import { Button } from 'ui';
 import { useState } from 'react';
+import { Button, Box, Center } from '@chakra-ui/react';
 
 const App = () => {
   const [showClient, setShowClient] = useState<boolean>(false);
@@ -10,10 +10,16 @@ const App = () => {
   };
 
   return (
-    <div className="App">
-      <Button onClick={handleClick} />
-      {showClient && <Client />}
-    </div>
+    <Box sx={{ height: '100vh', width: '100vw' }}>
+      {!showClient && (
+        <Center h="100%">
+          <Button size="lg" onClick={handleClick}>
+            Connect to Chat
+          </Button>
+        </Center>
+      )}
+      {showClient && <Client disconnectFn={handleClick} />}
+    </Box>
   );
 };
 
