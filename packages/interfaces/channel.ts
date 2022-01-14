@@ -6,4 +6,5 @@ export interface Channel {
   createdBy: User;
   users: User[];
   messages: Message[];
+  lastMessage?: Message;
 }
