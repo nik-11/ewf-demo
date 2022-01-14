@@ -13,7 +13,7 @@ const App = () => {
     <Box sx={{ height: '100vh', width: '100vw' }}>
       {!showClient && (
         <Center h="100%">
-          <Button size="lg" onClick={handleClick}>
+          <Button size="lg" colorScheme="purple" onClick={handleClick}>
             Connect to Chat
           </Button>
         </Center>

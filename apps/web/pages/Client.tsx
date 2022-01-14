@@ -1,21 +1,22 @@
 import { FunctionComponent, useState, useEffect } from 'react';
 import { JSONCodec, connect, NatsConnection, MsgHdrsImpl, Nuid } from 'nats.ws';
-import { Message, User } from 'interfaces';
+import { User, Channel } from 'interfaces';
 import {
   Text,
   Flex,
   Box,
   Center,
-  Heading,
-  VStack,
-  Divider,
-  Spacer,
   Button,
   Input,
+  useDisclosure,
 } from '@chakra-ui/react';
-import OnlineUsers from './OnlineUsers';
-import Channel from './Channel';
-import SidePanel from './SidePanel';
+import Thread from '../components/Thread';
+import SidePanel from '../components/SidePanel';
+import NewThreadModal from '../components/NewThreadModal';
+import uniq from 'lodash.uniq';
+import { DateTime } from 'luxon';
+import ScrollToBottom from 'react-scroll-to-bottom';
+import { css } from '@emotion/css';
 
 interface ClientProps {
   disconnectFn: () => void;
@@ -30,33 +31,81 @@ export const publishEvent = (
 ) => {
   const headers = new MsgHdrsImpl();
   headers.append('id', nuid);
-  headers.append('unix_time', Date.now().toString());
+  headers.append('unix_time', DateTime.now().toISO());
   connection.publish(subject, jc.encode(data), { headers });
 };
 
+const itemHover = {
+  backgroundColor: 'rgba(0,0,0,0.08)',
+  color: 'purple.500',
+  cursor: 'pointer',
+};
+
+const SCROLL_CSS = css({ height: 'calc(100% - 50px)', paddingBottom: '60px' });
+
 const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
   const [nc, setConnection] = useState<NatsConnection>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [me, setMe] = useState<User>(null);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<Channel>(null);
+  const [subscriptions, setSubscriptions] = useState<string[]>([]);
 
   const listenForChanges = async (subscription) => {
+    setSubscriptions((subscriptions: string[]) => {
+      if (!subscriptions.some((subject) => subject === subscription.subject)) {
+        return [subscription.subject, ...subscriptions];
+      } else {
+        return subscriptions;
+      }
+    });
     for await (const m of subscription) {
       const { data, pattern }: any = jc.decode(m.data);
       switch (pattern) {
         case 'users':
           setUsers(data);
+          if (!me) {
+            setMe(data.find(({ id }) => id === nuid));
+          }
           break;
-        case 'messages':
-          setMessages((messages) => [...messages, data]);
+        case `${nuid}.channels`:
+          setChannels((channels) => uniq([...channels, data.channel]));
           break;
         default:
           break;
       }
-      console.log(
-        `[${subscription.getProcessed()}]: ${JSON.stringify({ data, pattern })}`
-      );
     }
     console.log('subscription closed');
+  };
+
+  const listenForChannelMessages = async (subscription) => {
+    setSubscriptions((subscriptions: string[]) => {
+      if (!subscriptions.some((subject) => subject === subscription.subject)) {
+        return [subscription.subject, ...subscriptions];
+      } else {
+        return subscriptions;
+      }
+    });
+    for await (const m of subscription) {
+      const { data, pattern }: any = jc.decode(m.data);
+      const subject = pattern.substring(0, pattern.length - 9);
+      const idx = channels.findIndex((channel) => channel.subject === subject);
+      if (idx !== -1) {
+        const channel = channels[idx];
+        channel.lastMessage = data.message;
+        channel.messages.push(data.message);
+        channel.messages.sort((a, b) => {
+          if (a.timestamp > b.timestamp) return 1;
+          if (a.timestamp < b.timestamp) return -1;
+          return 0;
+        });
+        setChannels((c) => {
+          return uniq([channel, ...c]);
+        });
+      }
+    }
   };
 
   useEffect(() => {
@@ -81,16 +130,63 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
 
   useEffect(() => {
     if (nc) {
-      const messages = nc.subscribe('messages');
-      listenForChanges(messages);
       const users = nc.subscribe('users');
       listenForChanges(users);
+      const channels = nc.subscribe(`${nuid}.channels`);
+      listenForChanges(channels);
     }
   }, [nc]);
 
+  useEffect(() => {
+    if (nc && channels.length > 0) {
+      for (const channel of channels) {
+        if (selectedChannel && selectedChannel.subject === channel.subject) {
+          setSelectedChannel(channel);
+        }
+        const subscription = `${channel.subject}.messages`;
+        if (!subscriptions.some((subject) => subject === subscription)) {
+          const messages = nc.subscribe(subscription);
+          listenForChannelMessages(messages);
+        }
+      }
+    }
+  }, [channels]);
+
   const sendMessage = (event) => {
     if (event.key === 'Enter') {
-      publishEvent(nc, 'message', { message: event.target.value });
+      publishEvent(nc, 'message', {
+        subject: selectedChannel.subject,
+        message: event.target.value,
+      });
+      event.target.value = '';
+    }
+  };
+
+  const createNewThread = (users) => {
+    users.push(me);
+    users.sort((a, b) => {
+      if (a.id > b.id) return 1;
+      if (a.id < b.id) return -1;
+      return 0;
+    });
+    const ids: string[] = users.map(({ id }) => id);
+    const subject = ids.join('.');
+    const channel = channels.find((channel) => channel.subject === subject);
+
+    if (!channel) {
+      const newChannel: Channel = {
+        subject,
+        createdBy: me,
+        users,
+        messages: [],
+      };
+      publishEvent(nc, 'create_channel', {
+        subject,
+        users: ids,
+      });
+      setSelectedChannel(newChannel);
+    } else {
+      setSelectedChannel(channel);
     }
   };
 
@@ -106,15 +202,41 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
         <SidePanel
           heading="Threads"
           headingButton={
-            <Button
-              size="sm"
-              colorScheme="purple"
-              onClick={() => console.log('new thread!')}
-            >
+            <Button size="sm" colorScheme="purple" onClick={onOpen}>
               New Thread
             </Button>
           }
-          listItems={[]}
+          listItems={channels.map((channel, index) => {
+            const isSelected = channel.subject === selectedChannel?.subject;
+            return (
+              <Box
+                py="2"
+                px="4"
+                w="100%"
+                _hover={itemHover}
+                key={`user${index}`}
+                onClick={() => setSelectedChannel(channel)}
+              >
+                <Text
+                  fontWeight={isSelected ? 700 : 400}
+                  fontSize="lg"
+                  isTruncated
+                >
+                  {channel.users.map(({ name }) => name).join(', ')}
+                </Text>
+                {channel.lastMessage ? (
+                  <Text fontSize="sm" isTruncated>
+                    {DateTime.fromMillis(
+                      parseInt(channel.lastMessage.timestamp)
+                    ).toLocaleString(DateTime.TIME_SIMPLE)}{' '}
+                    {channel.lastMessage.message}
+                  </Text>
+                ) : (
+                  <Text fontSize="sm">No messages</Text>
+                )}
+              </Box>
+            );
+          })}
           emptyListMessage="No threads. Start writing some messages!"
         />
       </Box>
@@ -129,9 +251,9 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
         >
           <Text fontSize="xl">Messages</Text>
         </Center>
-        <Box overflowY="scroll" h="calc(100% - 50px)" paddingBottom="50px">
-          <Channel></Channel>
-        </Box>
+        <ScrollToBottom className={SCROLL_CSS}>
+          <Thread thread={selectedChannel} />
+        </ScrollToBottom>
         <Box
           bg="transparent"
           px="4"
@@ -140,7 +262,15 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
           position="absolute"
           bottom="0"
         >
-          <Input bg="white" placeholder="Message" variant="filled" />
+          {!!selectedChannel && (
+            <Input
+              bg="white"
+              placeholder="Message"
+              variant="filled"
+              _focus={{ backgroundColor: 'white' }}
+              onKeyPress={sendMessage}
+            />
+          )}
         </Box>
       </Box>
       <Box
@@ -161,18 +291,10 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
             <Center
               h="40px"
               w="100%"
-              _hover={
-                id === nuid
-                  ? {}
-                  : {
-                      background: 'white',
-                      color: 'purple.500',
-                      cursor: 'pointer',
-                    }
-              }
+              _hover={id === nuid ? {} : itemHover}
               key={`user${index}`}
               onClick={() =>
-                id === nuid ? undefined : console.log({ id, name })
+                id === nuid ? undefined : createNewThread([{ id, name }])
               }
             >
               <Flex fontSize="md">
@@ -184,23 +306,12 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
           emptyListMessage="No users are online."
         />
       </Box>
-      {/* <Text fontSize="xl" sx={{ fontWeight: 'bold' }}>
-        Client
-      </Text>
-      <OnlineUsers users={users} />
-      <div>
-        <Channel />
-        <h3>Messages</h3>
-        <div>{messages.length}</div>
-        {messages?.length > 0 && (
-          <div>
-            {messages.map(({ message }, index) => (
-              <div key={`message${index}`}>{message}</div>
-            ))}
-          </div>
-        )}
-      </div>
-      <input type="text" onKeyDown={sendMessage} /> */}
+      <NewThreadModal
+        isOpen={isOpen}
+        onClose={onClose}
+        users={users?.length > 0 ? users.filter(({ id }) => id !== nuid) : []}
+        emitSelectedUsers={createNewThread}
+      />
     </Flex>
   );
 };
