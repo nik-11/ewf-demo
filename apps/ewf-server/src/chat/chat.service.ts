@@ -42,26 +42,29 @@ export class ChatService implements OnApplicationBootstrap {
     }
   }
 
-  getUsers() {
-    return this.serialiseUsersToJSON();
+  publishUsers() {
+    return this.client.emit('users', this.serialiseUsersToJSON());
   }
 
   publishMessageToChannel(subject: string, userId: string, msg: string) {
     const channel = this.channels.get(subject);
     if (channel) {
+      const timestamp = Date.now();
       const message: Message = {
         author: this.users.get(userId),
         message: msg,
-        timestamp: Date.now().toString(),
+        timestamp: timestamp.toString(),
       };
+      const lastMessageTimestamp = channel.lastMessage
+        ? new Date(channel.lastMessage.timestamp)
+        : null;
+      if (!lastMessageTimestamp || lastMessageTimestamp.getTime() < timestamp) {
+        channel.lastMessage = message;
+      }
       channel.messages.push(message);
       this.channels.set(subject, channel);
-      return this.client.emit(`${subject}.messages`, { message });
+      this.client.emit(`${subject}.messages`, { message });
     }
-  }
-
-  publishUsers() {
-    return this.client.emit('users', this.serialiseUsersToJSON());
   }
 
   createChannel(subject: string, userId: string, channelUsers: string[]) {
@@ -75,7 +78,9 @@ export class ChatService implements OnApplicationBootstrap {
         messages: [],
       };
       this.channels.set(subject, channel);
-      this.client.emit(subject, { channel });
+      for (const user of users) {
+        this.client.emit(`${user.id}.channels`, { channel });
+      }
     }
   }
 
