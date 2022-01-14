@@ -1,78 +1,42 @@
-# Turborepo starter with NPM
+# EWF Demo
 
-This is an official starter turborepo.
+This repository is built using [Turborepo](https://turborepo.org/docs), a monorepo build system.
 
-## What's inside?
+## What's in this repo?
 
-This turborepo uses [NPM](https://www.npmjs.com/) as a package manager. It includes the following packages/apps:
+This repo uses [NPM](https://www.npmjs.com/) as the package manager. The following packages/apps are included:
 
 ### Apps and Packages
 
-- `docs`: a [Next.js](https://nextjs.org) app
-- `web`: another [Next.js](https://nextjs.org) app
-- `ui`: a stub React component library shared by both `web` and `docs` applications
+- `ewf-server`: a [Nest.js](https://docs.nestjs.com/) web server
+- `nats-server`: a [Docker](https://docs.docker.com/get-started/overview/) container that runs a NATS server locally
+- `ewf-app`: a [Next.js](https://nextjs.org) React app
+- `interfaces`: a shared interface library used between `ewf-server` and `ewf-app`
 - `config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
 - `tsconfig`: `tsconfig.json`s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
-### Utilities
+## Install
 
-This turborepo has some additional tools already setup for you:
+To install all dependencies, run the following command:
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Jest](https://jestjs.io) test runner for all things JavaScript
-- [Prettier](https://prettier.io) for code formatting
+```bash
+npm install
+```
 
-## Setup
-
-This repository is used in the `npx create-turbo@latest` command, and selected when choosing which package manager you wish to use with your monorepo (NPM).
-
-### Build
+## Build
 
 To build all apps and packages, run the following command:
 
-```
-cd my-turborepo
+```bash
 npm run build
 ```
 
-### Develop
+## Run
 
-To develop all apps and packages, run the following command:
+To run all apps and packages, run the following command:
 
-```
-cd my-turborepo
+```bash
 npm run dev
 ```
-
-### Remote Caching
-
-Turborepo can use a technique known as [Remote Caching (Beta)](https://turborepo.org/docs/features/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching (Beta) you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup), then enter the following commands:
-
-```
-cd my-turborepo
-npx turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your turborepo:
-
-```
-npx turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Pipelines](https://turborepo.org/docs/features/pipelines)
-- [Caching](https://turborepo.org/docs/features/caching)
-- [Remote Caching (Beta)](https://turborepo.org/docs/features/remote-caching)
-- [Scoped Tasks](https://turborepo.org/docs/features/scopes)
-- [Configuration Options](https://turborepo.org/docs/reference/configuration)
-- [CLI Usage](https://turborepo.org/docs/reference/command-line-reference)
