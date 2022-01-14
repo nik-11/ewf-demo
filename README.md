@@ -8,12 +8,12 @@ This repo uses [NPM](https://www.npmjs.com/) as the package manager. The followi
 
 ### Apps and Packages
 
-- `ewf-server`: a [Nest.js](https://docs.nestjs.com/) web server
-- `nats-server`: a [Docker](https://docs.docker.com/get-started/overview/) container that runs a NATS server locally
-- `ewf-app`: a [Next.js](https://nextjs.org) React app
-- `interfaces`: a shared interface library used between `ewf-server` and `ewf-app`
-- `config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `tsconfig`: `tsconfig.json`s used throughout the monorepo
+- `ewf-server`: a [Nest.js](https://docs.nestjs.com/) web server that subscribes to NATS server events, and responds accordingly by emitting events on the NATS server client.
+- `nats-server`: a [Docker](https://docs.docker.com/get-started/overview/) container that runs a NATS server locally.
+- `ewf-app`: a [Next.js](https://nextjs.org) React app that allows users to connect to a chat client and send messages through "threads".
+- `interfaces`: a shared interface library used between `ewf-server` and `ewf-app`.
+- `config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`).
+- `tsconfig`: `tsconfig.json`s used throughout the monorepo.
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
