@@ -129,7 +129,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
   }, []);
 
   useEffect(() => {
-    if (nc) {
+    if (nc && !nc.isDraining()) {
       const users = nc.subscribe('users');
       listenForChanges(users);
       const channels = nc.subscribe(`${nuid}.channels`);
@@ -138,7 +138,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
   }, [nc]);
 
   useEffect(() => {
-    if (nc && channels.length > 0) {
+    if (nc && !nc.isDraining() && channels.length > 0) {
       for (const channel of channels) {
         if (selectedChannel && selectedChannel.subject === channel.subject) {
           setSelectedChannel(channel);

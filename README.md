@@ -10,7 +10,7 @@ This repo uses [NPM](https://www.npmjs.com/) as the package manager. The followi
 
 - `ewf-server`: a [Nest.js](https://docs.nestjs.com/) web server that subscribes to NATS server events, and responds accordingly by emitting events on the NATS server client.
 - `nats-server`: a [Docker](https://docs.docker.com/get-started/overview/) container that runs a NATS server locally.
-- `ewf-app`: a [Next.js](https://nextjs.org) React app that allows users to connect to a chat client and send messages through "threads".
+- `ewf-app`: a [Next.js](https://nextjs.org) React app that allows users to connect to a chat client and send messages through "threads". It connects directly to `nats-server` over the `websocket` protocol.
 - `interfaces`: a shared interface library used between `ewf-server` and `ewf-app`.
 - `config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`).
 - `tsconfig`: `tsconfig.json`s used throughout the monorepo.
@@ -53,3 +53,11 @@ npm run dev
   ```bash
   docker logs nats-server-nats-ws-1 --follow
   ```
+
+## Known Issues
+
+1. Due to time limitations, `ewf-app` is not mobile friendly and should only be viewed in a larger viewport.
+
+2. Making changes when running `npm run dev` can occasionally cause the app to reload which does not correctly publish a `disconnect` event to the `nats-server`, causing the frontend and server to be de-synced (as the user is issued a new ID and name). Fix this by reloading the `ewf-app` window.
+
+3. Not all events are synced across `ewf-server` and `ewf-app` (namely `channel.lastMessage` which is just set locally in `ewf-app` when a message is received for the given channel).
