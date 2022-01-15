@@ -5,14 +5,23 @@ import { ChatService } from './chat.service';
 
 @Controller()
 export class ChatController implements OnApplicationBootstrap {
-  private readonly client = new NatsClient();
+  private readonly client = new NatsClient(); // Maintains connection to the NATS server
 
   constructor(private readonly chatService: ChatService) {}
 
+  /**
+   * Connect to the NATS server when the application is started
+   */
   async onApplicationBootstrap() {
     this.client.connect().then((value) => console.log(value));
   }
 
+  /**
+   * Subscribes to the `user.connected` subject.
+   * Connects a user to the application.
+   * @param data
+   * @param context
+   */
   @EventPattern('user.connected')
   connect(@Payload() data: any, @Ctx() context: NatsContext) {
     console.log(`Subject: ${context.getSubject()}`);
@@ -30,6 +39,12 @@ export class ChatController implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * Subscribes to the `user.disconnected` subject.
+   * Disconnects a user from the application.
+   * @param data
+   * @param context
+   */
   @EventPattern('user.disconnected')
   disconnect(@Payload() data: any, @Ctx() context: NatsContext) {
     console.log(`Subject: ${context.getSubject()}`);
@@ -43,6 +58,12 @@ export class ChatController implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * Subscribes to the any subject matching `channel.messages.>`.
+   * Stores messages against the given channel and emits it to the recipients of the channel.
+   * @param data
+   * @param context
+   */
   @EventPattern('channel.messages.>')
   sendMessage(@Payload() data: any, @Ctx() context: NatsContext) {
     console.log(`Subject: ${context.getSubject()}`);
@@ -62,6 +83,12 @@ export class ChatController implements OnApplicationBootstrap {
     }
   }
 
+  /**
+   * Subscribes to the `channel.created` subject.
+   * Allows a user to create a channel with any number of recipients, which is then emitted to each recipient.
+   * @param data
+   * @param context
+   */
   @EventPattern('channel.created')
   createChannel(@Payload() data: any, @Ctx() context: NatsContext) {
     console.log(`Subject: ${context.getSubject()}`);

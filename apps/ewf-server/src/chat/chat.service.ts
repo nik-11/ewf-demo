@@ -1,5 +1,4 @@
-import { NatsClient } from '@alexy4744/nestjs-nats-jetstream-transporter';
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Channel, Message, User } from 'interfaces';
 import {
   adjectives,
@@ -9,12 +8,16 @@ import {
 
 @Injectable()
 export class ChatService {
-  users: Map<string, User> = new Map();
-  messages: Map<string, Message[]> = new Map();
-  channels: Map<string, Channel> = new Map();
+  users: Map<string, User> = new Map(); // In memory store for all Users
+  channels: Map<string, Channel> = new Map(); // In memory stored for all Channels
 
   constructor() {}
 
+  /**
+   * Connects a user to the application and emits any related channels to the connecting user.
+   * @param id
+   * @returns
+   */
   connectUser(id: string) {
     const user = this.users.get(id);
     if (!user) {
@@ -39,6 +42,11 @@ export class ChatService {
     return { users, channels };
   }
 
+  /**
+   * Disconnects a user from the application
+   * @param id
+   * @returns
+   */
   disconnectUser(id: string) {
     const user = this.users.get(id);
     if (id) {
@@ -47,6 +55,13 @@ export class ChatService {
     }
   }
 
+  /**
+   * Publishes a message to a given channel, and updates the last message if possible
+   * @param subject
+   * @param userId
+   * @param msg
+   * @returns
+   */
   publishMessageToChannel(subject: string, userId: string, msg: string) {
     const channel = this.channels.get(subject);
     if (channel) {
@@ -68,6 +83,13 @@ export class ChatService {
     }
   }
 
+  /**
+   * Creates a channel, stored as a subject of the user's IDs joined with '.'
+   * @param subject
+   * @param userId
+   * @param channelUsers
+   * @returns
+   */
   createChannel(subject: string, userId: string, channelUsers: string[]) {
     if (!this.channels.has(subject)) {
       const createdBy = this.users.get(userId);
@@ -83,29 +105,18 @@ export class ChatService {
     }
   }
 
-  joinChannel(subject: string, userId: string) {
-    const channel = this.channels.get(subject);
-    // Check user can access the channel
-    if (channel && channel.users.some(({ id }) => id === userId)) {
-      // this.client.emit(subject, { channel });
-    } else {
-      // this.client.emit(subject, { message: 'Unauthorized' });
-    }
-  }
-
-  deleteChannel(subject: string, userId: string) {
-    const channel = this.channels.get(subject);
-    // Check user is creator of channel
-    if (channel && channel.createdBy.id === userId) {
-      this.channels.delete(subject);
-      // this.client.emit(subject, { message: 'Deleted' });
-    }
-  }
-
+  /**
+   * Serialises the Users Map to an Array of Users
+   * @returns
+   */
   private serialiseUsersToJSON() {
     return Array.from(this.users).map(([k, v]) => v);
   }
 
+  /**
+   * Serialises the Channels Map to an Array of Users
+   * @returns
+   */
   private serialiseChannelsToJSON() {
     return Array.from(this.channels).map(([k, v]) => v);
   }
