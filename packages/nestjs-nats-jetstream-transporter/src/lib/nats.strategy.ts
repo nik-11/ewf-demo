@@ -105,8 +105,6 @@ export class NatsTransportStrategy
     manager: JetStreamManager,
     configs: NatsStreamConfig[] = []
   ): Promise<void> {
-    console.log(manager);
-    console.log(configs);
     await Promise.all(
       configs.map((config) => this.upsertStream(manager, config))
     );
@@ -231,7 +229,6 @@ export class NatsTransportStrategy
 
         this.logger.log(`Subscribed to ${pattern} events`);
       } catch (error: any) {
-        console.log(error);
         if (error.message === 'no stream matches subject') {
           throw new Error(
             `Cannot find stream with the ${pattern} event pattern`
