@@ -18,8 +18,14 @@
   },
   "turbo": {
     "pipeline": {
+      "install": {
+        "dependsOn": [
+          "^install"
+        ]
+      },
       "build": {
         "dependsOn": [
+          "^install",
           "^build"
         ],
         "outputs": [

@@ -1,7 +1,7 @@
 import { Message } from 'interfaces';
 import { FunctionComponent } from 'react';
 import { Box, Text, Flex } from '@chakra-ui/react';
-import { nuid } from '../pages/Client';
+import { nuid } from '../pages/App';
 import { DateTime } from 'luxon';
 
 interface ThreadMessageProps {
@@ -22,7 +22,7 @@ const self = {
 };
 
 const ThreadMessage: FunctionComponent<ThreadMessageProps> = ({ message }) => {
-  const isAuthor = nuid === message.author.id;
+  const isAuthor = nuid === message?.author?.id;
   return (
     <Flex w="100%" direction="column">
       <Box

@@ -1,6 +1,9 @@
 import Client from './Client';
 import { useState } from 'react';
 import { Button, Box, Center } from '@chakra-ui/react';
+import { Nuid } from 'nats.ws';
+
+export const nuid = new Nuid().next();
 
 const App = () => {
   const [showClient, setShowClient] = useState<boolean>(false);
@@ -10,7 +13,7 @@ const App = () => {
   };
 
   return (
-    <Box sx={{ height: '100vh', width: '100vw' }}>
+    <Box sx={{ height: '100vh', width: '100vw', overflow: 'hidden' }}>
       {!showClient && (
         <Center h="100%">
           <Button size="lg" colorScheme="purple" onClick={handleClick}>

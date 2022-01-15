@@ -1,5 +1,5 @@
 import { FunctionComponent, useState, useEffect } from 'react';
-import { JSONCodec, connect, NatsConnection, MsgHdrsImpl, Nuid } from 'nats.ws';
+import { JSONCodec, connect, NatsConnection, MsgHdrsImpl } from 'nats.ws';
 import { User, Channel } from 'interfaces';
 import {
   Text,
@@ -17,22 +17,24 @@ import uniq from 'lodash.uniq';
 import { DateTime } from 'luxon';
 import ScrollToBottom from 'react-scroll-to-bottom';
 import { css } from '@emotion/css';
+import { nuid } from './App';
 
 interface ClientProps {
   disconnectFn: () => void;
 }
 
 const jc = JSONCodec();
-export const nuid = new Nuid().next();
 export const publishEvent = (
   connection: NatsConnection,
   subject: string,
   data: any
 ) => {
-  const headers = new MsgHdrsImpl();
-  headers.append('id', nuid);
-  headers.append('unix_time', DateTime.now().toISO());
-  connection.publish(subject, jc.encode(data), { headers });
+  if (connection) {
+    const headers = new MsgHdrsImpl();
+    headers.append('id', nuid);
+    headers.append('unix_time', DateTime.now().toISO());
+    connection.publish(subject, jc.encode(data), { headers });
+  }
 };
 
 const itemHover = {
@@ -41,7 +43,11 @@ const itemHover = {
   cursor: 'pointer',
 };
 
-const SCROLL_CSS = css({ height: 'calc(100% - 50px)', paddingBottom: '60px' });
+export const SCROLL_CSS = css({
+  height: 'calc(100% - 50px)',
+  paddingBottom: '60px',
+  overflowY: 'auto',
+});
 
 const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -53,7 +59,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
   const [selectedChannel, setSelectedChannel] = useState<Channel>(null);
   const [subscriptions, setSubscriptions] = useState<string[]>([]);
 
-  const listenForChanges = async (subscription) => {
+  const listenForChanges = async (subject: string, subscription) => {
     setSubscriptions((subscriptions: string[]) => {
       if (!subscriptions.some((subject) => subject === subscription.subject)) {
         return [subscription.subject, ...subscriptions];
@@ -62,16 +68,27 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
       }
     });
     for await (const m of subscription) {
-      const { data, pattern }: any = jc.decode(m.data);
-      switch (pattern) {
-        case 'users':
-          setUsers(data);
+      const data: any = jc.decode(m.data);
+      console.log(data);
+      switch (subject) {
+        case 'users.online':
+          setUsers(data.users);
           if (!me) {
-            setMe(data.find(({ id }) => id === nuid));
+            setMe(data.users.find(({ id }) => id === nuid));
           }
           break;
         case `${nuid}.channels`:
-          setChannels((channels) => uniq([...channels, data.channel]));
+          setChannels((channels) =>
+            uniq([...channels, ...data.channels]).sort((a, b) => {
+              if (a?.lastMessage?.timestamp < b?.lastMessage?.timestamp) {
+                return 1;
+              }
+              if (a?.lastMessage?.timestamp > b?.lastMessage?.timestamp) {
+                return -1;
+              }
+              return 1;
+            })
+          );
           break;
         default:
           break;
@@ -89,8 +106,9 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
       }
     });
     for await (const m of subscription) {
-      const { data, pattern }: any = jc.decode(m.data);
-      const subject = pattern.substring(0, pattern.length - 9);
+      const data: any = jc.decode(m.data);
+      console.log(data);
+      const subject = m.subject.substring(0, m.subject.length - 9);
       const idx = channels.findIndex((channel) => channel.subject === subject);
       if (idx !== -1) {
         const channel = channels[idx];
@@ -116,24 +134,28 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
         .then((connection) => {
           c = connection;
           setConnection(c);
-          publishEvent(c, 'connect', { message: 'hi!' });
+          publishEvent(c, 'user.connected', { message: 'hi!' });
         })
         .catch((err) => console.log(err));
     }
 
     return () => {
       console.log('Unmounting component');
-      publishEvent(c, 'disconnect', { message: 'bye!' });
+      publishEvent(c, 'user.disconnected', { message: 'bye!' });
       c.drain();
     };
   }, []);
 
   useEffect(() => {
     if (nc && !nc.isDraining()) {
-      const users = nc.subscribe('users');
-      listenForChanges(users);
-      const channels = nc.subscribe(`${nuid}.channels`);
-      listenForChanges(channels);
+      // Setup subscriptions
+      const onlineUserSubject = 'users.online';
+      const channelsCreatedSubject = `${nuid}.channels`;
+      listenForChanges(onlineUserSubject, nc.subscribe(onlineUserSubject));
+      listenForChanges(
+        channelsCreatedSubject,
+        nc.subscribe(channelsCreatedSubject)
+      );
     }
   }, [nc]);
 
@@ -154,7 +176,8 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
 
   const sendMessage = (event) => {
     if (event.key === 'Enter') {
-      publishEvent(nc, 'message', {
+      const subject = selectedChannel.subject;
+      publishEvent(nc, `channel.messages.${subject}`, {
         subject: selectedChannel.subject,
         message: event.target.value,
       });
@@ -180,7 +203,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
         users,
         messages: [],
       };
-      publishEvent(nc, 'create_channel', {
+      publishEvent(nc, 'channel.created', {
         subject,
         users: ids,
       });
@@ -195,6 +218,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
       <Box
         minWidth="250px"
         maxWidth="500px"
+        h="100%"
         flex="1"
         borderRightColor="gray.300"
         borderRightWidth="1px"
@@ -206,37 +230,41 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
               New Thread
             </Button>
           }
-          listItems={channels.map((channel, index) => {
-            const isSelected = channel.subject === selectedChannel?.subject;
-            return (
-              <Box
-                py="2"
-                px="4"
-                w="100%"
-                _hover={itemHover}
-                key={`user${index}`}
-                onClick={() => setSelectedChannel(channel)}
-              >
-                <Text
-                  fontWeight={isSelected ? 700 : 400}
-                  fontSize="lg"
-                  isTruncated
+          listItems={
+            channels.length > 0 &&
+            channels.map((channel, index) => {
+              const isSelected = channel?.subject === selectedChannel?.subject;
+              return (
+                <Box
+                  flexShrink="0"
+                  py="2"
+                  px="4"
+                  w="100%"
+                  _hover={itemHover}
+                  key={`user${index}`}
+                  onClick={() => setSelectedChannel(channel)}
                 >
-                  {channel.users.map(({ name }) => name).join(', ')}
-                </Text>
-                {channel.lastMessage ? (
-                  <Text fontSize="sm" isTruncated>
-                    {DateTime.fromMillis(
-                      parseInt(channel.lastMessage.timestamp)
-                    ).toLocaleString(DateTime.TIME_SIMPLE)}{' '}
-                    {channel.lastMessage.message}
+                  <Text
+                    fontWeight={isSelected ? 700 : 400}
+                    fontSize="lg"
+                    isTruncated
+                  >
+                    {channel?.users?.map(({ name }) => name).join(', ')}
                   </Text>
-                ) : (
-                  <Text fontSize="sm">No messages</Text>
-                )}
-              </Box>
-            );
-          })}
+                  {channel?.lastMessage ? (
+                    <Text fontSize="sm" isTruncated>
+                      {DateTime.fromMillis(
+                        parseInt(channel.lastMessage.timestamp)
+                      ).toLocaleString(DateTime.TIME_SIMPLE)}{' '}
+                      {channel.lastMessage.message}
+                    </Text>
+                  ) : (
+                    <Text fontSize="sm">No messages</Text>
+                  )}
+                </Box>
+              );
+            })
+          }
           emptyListMessage="No threads. Start writing some messages!"
         />
       </Box>
@@ -277,6 +305,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
         minWidth="300px"
         maxWidth="350px"
         flex="1"
+        h="100%"
         borderLeftWidth="1px"
         borderLeftColor="gray.300"
       >
@@ -289,6 +318,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
           }
           listItems={users.map(({ id, name }, index) => (
             <Center
+              flexShrink="0"
               h="40px"
               w="100%"
               _hover={id === nuid ? {} : itemHover}

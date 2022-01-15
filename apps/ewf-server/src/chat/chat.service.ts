@@ -1,5 +1,5 @@
-import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
-import { ClientProxy } from '@nestjs/microservices';
+import { NatsClient } from '@alexy4744/nestjs-nats-jetstream-transporter';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { Channel, Message, User } from 'interfaces';
 import {
   adjectives,
@@ -8,42 +8,43 @@ import {
 } from 'unique-names-generator';
 
 @Injectable()
-export class ChatService implements OnApplicationBootstrap {
-  numOfUsers: number = 0;
+export class ChatService {
   users: Map<string, User> = new Map();
   messages: Map<string, Message[]> = new Map();
   channels: Map<string, Channel> = new Map();
 
-  constructor(@Inject('NATS_SERVICE') private client: ClientProxy) {}
-
-  async onApplicationBootstrap() {
-    this.client.connect().then((value) => console.log(value));
-  }
+  constructor() {}
 
   connectUser(id: string) {
-    if (!this.users.has(id)) {
+    const user = this.users.get(id);
+    if (!user) {
       this.users.set(id, {
         id,
         name: uniqueNamesGenerator({
           dictionaries: [adjectives, animals],
           separator: '-',
         }),
+        online: true,
       });
-      this.numOfUsers++;
-      this.publishUsers();
+    } else {
+      this.users.set(id, { ...user, online: true });
     }
+    const users = this.serialiseUsersToJSON().filter((user) => user.online);
+    const channels = this.serialiseChannelsToJSON()
+      .map((channel) =>
+        channel.users.some((user) => user.id === id) ? channel : null
+      )
+      .filter((channel) => !!channel);
+    console.log(channels);
+    return { users, channels };
   }
 
   disconnectUser(id: string) {
-    if (this.users.has(id)) {
-      this.users.delete(id);
-      this.numOfUsers--;
-      this.publishUsers();
+    const user = this.users.get(id);
+    if (id) {
+      this.users.set(id, { ...user, online: false });
+      return this.serialiseUsersToJSON().filter((user) => user.online);
     }
-  }
-
-  publishUsers() {
-    return this.client.emit('users', this.serialiseUsersToJSON());
   }
 
   publishMessageToChannel(subject: string, userId: string, msg: string) {
@@ -63,7 +64,7 @@ export class ChatService implements OnApplicationBootstrap {
       }
       channel.messages.push(message);
       this.channels.set(subject, channel);
-      this.client.emit(`${subject}.messages`, { message });
+      return { subject, message };
     }
   }
 
@@ -78,9 +79,7 @@ export class ChatService implements OnApplicationBootstrap {
         messages: [],
       };
       this.channels.set(subject, channel);
-      for (const user of users) {
-        this.client.emit(`${user.id}.channels`, { channel });
-      }
+      return channel;
     }
   }
 
@@ -88,9 +87,9 @@ export class ChatService implements OnApplicationBootstrap {
     const channel = this.channels.get(subject);
     // Check user can access the channel
     if (channel && channel.users.some(({ id }) => id === userId)) {
-      this.client.emit(subject, { channel });
+      // this.client.emit(subject, { channel });
     } else {
-      this.client.emit(subject, { message: 'Unauthorized' });
+      // this.client.emit(subject, { message: 'Unauthorized' });
     }
   }
 
@@ -99,13 +98,15 @@ export class ChatService implements OnApplicationBootstrap {
     // Check user is creator of channel
     if (channel && channel.createdBy.id === userId) {
       this.channels.delete(subject);
-      this.client.emit(subject, { message: 'Deleted' });
+      // this.client.emit(subject, { message: 'Deleted' });
     }
   }
 
   private serialiseUsersToJSON() {
-    const arr = Array.from(this.users).map(([k, v]) => v);
-    console.log(arr);
-    return arr;
+    return Array.from(this.users).map(([k, v]) => v);
+  }
+
+  private serialiseChannelsToJSON() {
+    return Array.from(this.channels).map(([k, v]) => v);
   }
 }

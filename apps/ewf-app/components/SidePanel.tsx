@@ -8,6 +8,7 @@ import {
   VStack,
   Text,
 } from '@chakra-ui/react';
+import { SCROLL_CSS } from '../pages/Client';
 
 interface SidePanelProps {
   heading: string;
@@ -23,7 +24,7 @@ const SidePanel: FunctionComponent<SidePanelProps> = ({
   emptyListMessage,
 }) => {
   return (
-    <Box>
+    <Box h="100%">
       <Box>
         <Flex
           bg="white"
@@ -40,7 +41,7 @@ const SidePanel: FunctionComponent<SidePanelProps> = ({
           {headingButton && <Center>{headingButton}</Center>}
         </Flex>
       </Box>
-      <VStack h="calc(100% - 50px)">
+      <VStack className={SCROLL_CSS}>
         {(!listItems || listItems.length === 0) && emptyListMessage && (
           <Text p="4">{emptyListMessage}</Text>
         )}

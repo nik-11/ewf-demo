@@ -1,8 +1,29 @@
-import { NatsOptions, Transport } from '@nestjs/microservices';
+import { NatsTransportStrategy } from '@alexy4744/nestjs-nats-jetstream-transporter';
+import { DeliverPolicy, StreamConfig } from 'nats';
 
-export const natsConfig: NatsOptions = {
-  transport: Transport.NATS,
-  options: {
-    url: process.env.NATS_URL || 'nats://localhost:4222',
-  },
+type NatsStreamConfig = Partial<StreamConfig> & Pick<StreamConfig, 'name'>;
+export const natsConfig = {
+  strategy: new NatsTransportStrategy({
+    streams: <NatsStreamConfig[]>[
+      {
+        name: 'user-events',
+        subjects: [
+          'user.connected',
+          'user.disconnected',
+          'users.online',
+          '*.channels',
+        ],
+        deliver_policy: DeliverPolicy.LastPerSubject,
+      },
+      {
+        name: 'channel-events',
+        subjects: [
+          'channel.messages.>',
+          'channel.created',
+          'channel.deleted',
+          'channel.joined',
+        ],
+      },
+    ],
+  }),
 };
