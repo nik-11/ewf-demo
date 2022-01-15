@@ -52,13 +52,18 @@ export const SCROLL_CSS = css({
 const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const [nc, setConnection] = useState<NatsConnection>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [me, setMe] = useState<User>(null);
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [selectedChannel, setSelectedChannel] = useState<Channel>(null);
-  const [subscriptions, setSubscriptions] = useState<string[]>([]);
+  const [nc, setConnection] = useState<NatsConnection>(null); // Sets the NATS server connection
+  const [users, setUsers] = useState<User[]>([]); // Sets the online users
+  const [me, setMe] = useState<User>(null); // Set the current user
+  const [channels, setChannels] = useState<Channel[]>([]); // Sets the current users channels
+  const [selectedChannel, setSelectedChannel] = useState<Channel>(null); // Sets the open channel
+  const [subscriptions, setSubscriptions] = useState<string[]>([]); // Used to make sure subscriptions to channel messages are not duplicated
 
+  /**
+   * Subscribe to changes on `users.online` and `userId.channels` subjects
+   * @param subject
+   * @param subscription
+   */
   const listenForChanges = async (subject: string, subscription) => {
     setSubscriptions((subscriptions: string[]) => {
       if (!subscriptions.some((subject) => subject === subscription.subject)) {
@@ -69,7 +74,6 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
     });
     for await (const m of subscription) {
       const data: any = jc.decode(m.data);
-      console.log(data);
       switch (subject) {
         case 'users.online':
           setUsers(data.users);
@@ -94,9 +98,12 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
           break;
       }
     }
-    console.log('subscription closed');
   };
 
+  /**
+   * Subscribe to new messages on a given channel
+   * @param subscription
+   */
   const listenForChannelMessages = async (subscription) => {
     setSubscriptions((subscriptions: string[]) => {
       if (!subscriptions.some((subject) => subject === subscription.subject)) {
@@ -107,7 +114,6 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
     });
     for await (const m of subscription) {
       const data: any = jc.decode(m.data);
-      console.log(data);
       const subject = m.subject.substring(0, m.subject.length - 9);
       const idx = channels.findIndex((channel) => channel.subject === subject);
       if (idx !== -1) {
@@ -126,6 +132,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
     }
   };
 
+  // Initial NATS server connection and setup, as well as disconnection callback
   useEffect(() => {
     console.log('Mounting component');
     let c;
@@ -146,6 +153,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
     };
   }, []);
 
+  // After connecting to the NATS server, setup the initial subscriptions.
   useEffect(() => {
     if (nc && !nc.isDraining()) {
       // Setup subscriptions
@@ -159,6 +167,7 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
     }
   }, [nc]);
 
+  // When channels are updated we need to setup subscriptions to listen for new messages.
   useEffect(() => {
     if (nc && !nc.isDraining() && channels.length > 0) {
       for (const channel of channels) {
@@ -174,6 +183,10 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
     }
   }, [channels]);
 
+  /**
+   * Input callback to send messages to the currently open channel
+   * @param event
+   */
   const sendMessage = (event) => {
     if (event.key === 'Enter') {
       const subject = selectedChannel.subject;
@@ -185,6 +198,11 @@ const Client: FunctionComponent<ClientProps> = ({ disconnectFn }) => {
     }
   };
 
+  /**
+   * Create a new thread if it doesn't exist, or open it if it does.
+   * Threads are unique by the subject, which is the recipients Ids joined together with '.'
+   * @param users
+   */
   const createNewThread = (users) => {
     users.push(me);
     users.sort((a, b) => {
